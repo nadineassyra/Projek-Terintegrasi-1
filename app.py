@@ -4,268 +4,475 @@ from sklearn.preprocessing import MinMaxScaler
 import plotly.express as px
 
 
-# KONFIGURASI HALAMAN
+# ==================================================
+# 1. KONFIGURASI HALAMAN
+# ==================================================
+
 st.set_page_config(
     page_title="Analisis Wisata Bandung",
     layout="wide"
 )
 
 
-# LOAD DATA
-df = pd.read_csv(r"dataset/final dataset wisata bandung.csv")
+# ==================================================
+# 2. LOAD DATA
+# ==================================================
+
+df_awal = pd.read_csv(
+    "dataset/final dataset wisata bandung.csv"
+)
 
 
-# PREPROCESSING
-df = df[
+# ==================================================
+# 3. CEK DATA AWAL
+# ==================================================
+
+jumlah_data_awal = len(df_awal)
+missing_value_awal = int(df_awal.isnull().sum().sum())
+duplikat_awal = int(df_awal.duplicated().sum())
+
+
+# ==================================================
+# 4. PILIH ATRIBUT
+# ==================================================
+
+df = df_awal[
     [
-        'Nama Tempat',
-        'Kategori Tempat',
-        'Rating Tempat',
-        'Harga Masuk',
-        'User Rating'
+        "Nama Tempat",
+        "Kategori Tempat",
+        "Rating Tempat",
+        "Harga Masuk",
+        "User Rating"
     ]
+].copy()
+
+
+# ==================================================
+# 5. KONVERSI DATA NUMERIK
+# ==================================================
+
+df["Rating Tempat"] = pd.to_numeric(df["Rating Tempat"], errors="coerce")
+df["Harga Masuk"] = pd.to_numeric(df["Harga Masuk"], errors="coerce")
+df["User Rating"] = pd.to_numeric(df["User Rating"], errors="coerce")
+
+
+# ==================================================
+# 6. DATA BERMASALAH
+# ==================================================
+
+data_bermasalah = df[
+    df[
+        [
+            "Nama Tempat",
+            "Kategori Tempat",
+            "Rating Tempat",
+            "Harga Masuk",
+            "User Rating"
+        ]
+    ].isnull().any(axis=1)
 ]
 
-df = df.dropna()
+jumlah_data_bermasalah = len(data_bermasalah)
 
 
-# NORMALISASI
+# ==================================================
+# 7. PENANGANAN DATA KOSONG
+# ==================================================
+
+df["Nama Tempat"] = df["Nama Tempat"].fillna("Tidak Diketahui")
+df["Kategori Tempat"] = df["Kategori Tempat"].fillna("Tidak Diketahui")
+df["Rating Tempat"] = df["Rating Tempat"].fillna(df["Rating Tempat"].mean())
+df["Harga Masuk"] = df["Harga Masuk"].fillna(0)
+df["User Rating"] = df["User Rating"].fillna(0)
+
+
+jumlah_data_bersih = len(df)
+missing_value_bersih = int(df.isnull().sum().sum())
+duplikat_bersih = int(df.duplicated().sum())
+
+
+# ==================================================
+# 8. DATA SEBELUM NORMALISASI
+# ==================================================
+
+df_sebelum_normalisasi = df[
+    [
+        "Nama Tempat",
+        "Kategori Tempat",
+        "Rating Tempat",
+        "Harga Masuk",
+        "User Rating"
+    ]
+].copy()
+
+
+# ==================================================
+# 9. NORMALISASI MIN-MAX
+# ==================================================
+
 scaler = MinMaxScaler()
 
 df[
     [
-        'RatingNorm',
-        'ReviewNorm',
-        'TicketNorm'
+        "RatingNorm",
+        "ReviewNorm",
+        "TicketNorm"
     ]
 ] = scaler.fit_transform(
     df[
         [
-            'Rating Tempat',
-            'User Rating',
-            'Harga Masuk'
+            "Rating Tempat",
+            "User Rating",
+            "Harga Masuk"
         ]
     ]
 )
 
-# Harga murah = skor lebih tinggi
-df['TicketScore'] = 1 - df['TicketNorm']
+
+# ==================================================
+# 10. TICKET SCORE
+# ==================================================
+
+df["TicketScore"] = 1 - df["TicketNorm"]
 
 
-# HITUNG POPULARITAS
-df['Popularitas'] = (
-    (0.5 * df['RatingNorm']) +
-    (0.3 * df['ReviewNorm']) +
-    (0.2 * df['TicketScore'])
+# ==================================================
+# 11. HITUNG SKOR POPULARITAS
+# ==================================================
+
+df["Skor Popularitas"] = (
+    (0.5 * df["RatingNorm"])
+    + (0.3 * df["ReviewNorm"])
+    + (0.2 * df["TicketScore"])
 )
 
 
-# ABC ANALYSIS
+# ==================================================
+# 12. ABC ANALYSIS
+# ==================================================
+
 df = df.sort_values(
-    by='Popularitas',
+    by="Skor Popularitas",
     ascending=False
 )
 
-total_pop = df['Popularitas'].sum()
+total_pop = df["Skor Popularitas"].sum()
 
-df['Persentase'] = (
-    df['Popularitas'] / total_pop
+df["Persentase Kontribusi (%)"] = (
+    df["Skor Popularitas"] / total_pop
 ) * 100
 
-df['Kumulatif'] = (
-    df['Persentase']
+df["Persentase Kumulatif (%)"] = (
+    df["Persentase Kontribusi (%)"]
     .cumsum()
 )
 
-def kategori_abc(nilai):
 
+def klasifikasi_abc(nilai):
     if nilai <= 80:
         return "A"
-
     elif nilai <= 95:
         return "B"
-
     else:
         return "C"
 
-df['Kategori ABC'] = (
-    df['Kumulatif']
-    .apply(kategori_abc)
+
+df["Klasifikasi ABC"] = (
+    df["Persentase Kumulatif (%)"]
+    .apply(klasifikasi_abc)
 )
 
 
-# JUDUL DASHBOARD
-st.title(
-    "📍 Analisis Tempat Wisata Bandung"
+# ==================================================
+# 13. URUTAN POPULARITAS
+# ==================================================
+
+df = df.reset_index(drop=True)
+
+df.insert(
+    0,
+    "Urutan Popularitas",
+    range(1, len(df) + 1)
 )
+
+
+# ==================================================
+# 14. HEADER
+# ==================================================
+
+st.title("📍 Analisis Tempat Wisata Bandung")
 
 st.write(
-    "ABC Analysis Berdasarkan Rating, User Rating, dan Budget Pengunjung"
+    "ABC Analysis Berdasarkan Rating, Jumlah Ulasan, dan Budget Pengunjung"
 )
 
 
-# SIDEBAR FILTER
+# ==================================================
+# 15. SIDEBAR
+# ==================================================
+
+st.sidebar.title("Navigasi")
+
+menu = st.sidebar.radio(
+    "Pilih Halaman",
+    [
+        "Dashboard",
+        "Preprocessing",
+        "Hasil ABC Analysis"
+    ]
+)
+
+st.sidebar.markdown("---")
 st.sidebar.header("Filter Wisata")
 
 budget = st.sidebar.slider(
     "Budget Maksimal",
     0,
-    int(df['Harga Masuk'].max()),
-    50000
+    int(df["Harga Masuk"].max()),
+    int(df["Harga Masuk"].max())
 )
 
 kategori = st.sidebar.selectbox(
     "Kategori Wisata",
-    ["Semua"] +
-    sorted(
-        list(
-            df['Kategori Tempat']
-            .unique()
-        )
-    )
+    ["Semua"] + sorted(df["Kategori Tempat"].unique())
 )
 
 
-# FILTER DATA
+# ==================================================
+# 16. FILTER DATA
+# ==================================================
+
 hasil = df[
-    df['Harga Masuk'] <= budget
+    df["Harga Masuk"] <= budget
 ]
 
 if kategori != "Semua":
-
     hasil = hasil[
-        hasil['Kategori Tempat']
-        == kategori
+        hasil["Kategori Tempat"] == kategori
     ]
 
 
-# METRIC
-col1, col2, col3 = st.columns(3)
+# ==================================================
+# 17. HALAMAN DASHBOARD
+# ==================================================
 
-col1.metric(
-    "Kategori A",
-    len(
-        df[
-            df['Kategori ABC']
-            == 'A'
-        ]
+if menu == "Dashboard":
+
+    st.header("📊 Dashboard Analisis Wisata")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Total Data", len(df))
+    col2.metric("Kategori A", len(df[df["Klasifikasi ABC"] == "A"]))
+    col3.metric("Kategori B", len(df[df["Klasifikasi ABC"] == "B"]))
+    col4.metric("Kategori C", len(df[df["Klasifikasi ABC"] == "C"]))
+
+    st.markdown("---")
+
+    st.subheader("Distribusi Klasifikasi ABC")
+
+    abc_count = (
+        df.groupby("Klasifikasi ABC")
+        .size()
+        .reset_index(name="Jumlah")
     )
-)
 
-col2.metric(
-    "Kategori B",
-    len(
-        df[
-            df['Kategori ABC']
-            == 'B'
-        ]
+    fig1 = px.bar(
+        abc_count,
+        x="Klasifikasi ABC",
+        y="Jumlah",
+        title="Distribusi Klasifikasi ABC"
     )
-)
 
-col3.metric(
-    "Kategori C",
-    len(
-        df[
-            df['Kategori ABC']
-            == 'C'
-        ]
+    st.plotly_chart(fig1, use_container_width=True)
+
+    st.subheader("Top 10 Tempat Wisata Berdasarkan Skor Popularitas")
+
+    top10 = df.head(10)
+
+    fig2 = px.bar(
+        top10,
+        x="Nama Tempat",
+        y="Skor Popularitas",
+        title="Top 10 Tempat Wisata Berdasarkan Skor Popularitas"
     )
-)
+
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Rekomendasi Wisata Berdasarkan Filter")
+
+    rekomendasi = hasil[
+        hasil["Klasifikasi ABC"] == "A"
+    ]
+
+    st.dataframe(
+        rekomendasi[
+            [
+                "Urutan Popularitas",
+                "Nama Tempat",
+                "Kategori Tempat",
+                "Rating Tempat",
+                "Harga Masuk",
+                "Klasifikasi ABC"
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True
+    )
 
 
-# GRAFIK DISTRIBUSI ABC
-st.subheader(
-    "Distribusi Kategori ABC"
-)
+# ==================================================
+# 18. HALAMAN PREPROCESSING
+# ==================================================
 
-abc_count = (
-    df.groupby('Kategori ABC')
-    .size()
-    .reset_index(name='Jumlah')
-)
+elif menu == "Preprocessing":
 
-fig1 = px.bar(
-    abc_count,
-    x='Kategori ABC',
-    y='Jumlah',
-    title='Distribusi Kategori ABC'
-)
+    st.header("⚙️ Preprocessing Data")
 
-st.plotly_chart(
-    fig1,
-    use_container_width=True
-)
+    st.subheader("Ringkasan Data")
 
+    col1, col2, col3 = st.columns(3)
 
-# TOP 10 WISATA
-st.subheader(
-    "Top 10 Tempat Wisata Terpopuler"
-)
+    col1.metric("Data Awal", jumlah_data_awal)
+    col2.metric("Missing Value Awal", missing_value_awal)
+    col3.metric("Duplikat Awal", duplikat_awal)
 
-top10 = df.head(10)
+    col4, col5, col6 = st.columns(3)
 
-fig2 = px.bar(
-    top10,
-    x='Nama Tempat',
-    y='Popularitas',
-    title='Top 10 Wisata Terpopuler'
-)
+    col4.metric("Data Setelah Preprocessing", jumlah_data_bersih)
+    col5.metric("Missing Value Setelah Preprocessing", missing_value_bersih)
+    col6.metric("Duplikat Setelah Preprocessing", duplikat_bersih)
 
-st.plotly_chart(
-    fig2,
-    use_container_width=True
-)
+    st.markdown("---")
 
+    st.subheader("Tahapan Preprocessing")
 
-# REKOMENDASI
-st.subheader(
-    "Rekomendasi Wisata"
-)
+    st.markdown("""
+    1. Memilih atribut yang digunakan, yaitu **Nama Tempat**, **Kategori Tempat**, 
+       **Rating Tempat**, **Harga Masuk**, dan **User Rating**.
 
-rekomendasi = hasil[
-    hasil['Kategori ABC']
-    == 'A'
-]
+    2. Mengecek missing value dan data duplikat.
 
-st.dataframe(
-    rekomendasi[
-        [
-            'Nama Tempat',
-            'Kategori Tempat',
-            'Rating Tempat',
-            'Harga Masuk',
-            'Kategori ABC'
-        ]
-    ],
-    use_container_width=True
-)
+    3. Mengubah atribut **Rating Tempat**, **Harga Masuk**, dan **User Rating** 
+       menjadi tipe data numerik.
 
+    4. Menangani data kosong jika ditemukan.
 
-# TABEL HASIL ANALISIS
-st.subheader(
-    "Hasil Analisis ABC"
-)
+    5. Melakukan normalisasi menggunakan metode **Min-Max Normalization**.
 
-st.dataframe(
-    hasil[
-        [
-            'Nama Tempat',
-            'Kategori Tempat',
-            'Rating Tempat',
-            'User Rating',
-            'Harga Masuk',
-            'Popularitas',
-            'Kategori ABC'
-        ]
-    ],
-    use_container_width=True
-)
+    6. Menghitung **Ticket Score** dengan membalik nilai normalisasi harga tiket.
+
+    7. Menghitung **Skor Popularitas** sebagai dasar analisis ABC.
+    """)
+
+    st.subheader("Data Sebelum Normalisasi")
+
+    st.dataframe(
+        df_sebelum_normalisasi.head(15),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.subheader("Data Setelah Normalisasi")
+
+    st.dataframe(
+        df[
+            [
+                "Urutan Popularitas",
+                "Nama Tempat",
+                "RatingNorm",
+                "ReviewNorm",
+                "TicketNorm",
+                "TicketScore",
+                "Skor Popularitas"
+            ]
+        ].head(15),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("---")
+
+    st.subheader("Rumus yang Digunakan")
+
+    st.latex(
+        r"X_{norm} = \frac{X - X_{min}}{X_{max} - X_{min}}"
+    )
+
+    st.latex(
+        r"TicketScore = 1 - TicketNorm"
+    )
+
+    st.latex(
+        r"Skor\ Popularitas = (0.5 \times RatingNorm) + (0.3 \times ReviewNorm) + (0.2 \times TicketScore)"
+    )
 
 
-# COPYRIGHT
+# ==================================================
+# 19. HALAMAN HASIL ABC ANALYSIS
+# ==================================================
+
+elif menu == "Hasil ABC Analysis":
+
+    st.header("📌 Hasil ABC Analysis")
+
+    st.subheader("Tabel Hasil Analisis Berdasarkan Urutan Popularitas")
+
+    st.write(
+        f"Jumlah data yang tampil berdasarkan filter: **{len(hasil)}**"
+    )
+
+    st.dataframe(
+        hasil[
+            [
+                "Urutan Popularitas",
+                "Nama Tempat",
+                "Kategori Tempat",
+                "Rating Tempat",
+                "User Rating",
+                "Harga Masuk",
+                "Skor Popularitas",
+                "Persentase Kontribusi (%)",
+                "Persentase Kumulatif (%)",
+                "Klasifikasi ABC"
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("---")
+
+    st.subheader("Proporsi Klasifikasi ABC")
+
+    abc_count = (
+        hasil.groupby("Klasifikasi ABC")
+        .size()
+        .reset_index(name="Jumlah")
+    )
+
+    fig3 = px.pie(
+        abc_count,
+        names="Klasifikasi ABC",
+        values="Jumlah",
+        title="Proporsi Klasifikasi ABC"
+    )
+
+    st.plotly_chart(fig3, use_container_width=True)
+
+
+# ==================================================
+# 20. FOOTER
+# ==================================================
+
 st.markdown("---")
 
-st.caption(
-    "© 2026 Nadine Assyra & Thia Nadela | "
-    "Program Studi S1 Sains Data ULBI"
+st.markdown(
+    """
+    <div style='text-align:center'>
+        © 2026 Nadine Assyra & Thia Nadela | Projek Terintegrasi 1<br>
+        Program Studi S1 Sains Data ULBI
+    </div>
+    """,
+    unsafe_allow_html=True
 )
