@@ -223,13 +223,14 @@ menu = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("Filter Wisata")
+st.sidebar.header("Filter Rekomendasi Wisata")
 
 budget = st.sidebar.slider(
     "Budget Maksimal",
-    0,
-    int(df["Harga Masuk"].max()),
-    int(df["Harga Masuk"].max())
+    min_value=0,
+    max_value=int(df["Harga Masuk"].max()),
+    value=50000,
+    step=5000
 )
 
 kategori = st.sidebar.selectbox(
@@ -239,16 +240,18 @@ kategori = st.sidebar.selectbox(
 
 
 # ==================================================
-# 16. FILTER DATA
+# 16. FILTER REKOMENDASI
 # ==================================================
 
-hasil = df[
-    df["Harga Masuk"] <= budget
+rekomendasi = df[
+    (df["Harga Masuk"] <= budget)
+    &
+    (df["Klasifikasi ABC"] == "A")
 ]
 
 if kategori != "Semua":
-    hasil = hasil[
-        hasil["Kategori Tempat"] == kategori
+    rekomendasi = rekomendasi[
+        rekomendasi["Kategori Tempat"] == kategori
     ]
 
 
@@ -278,11 +281,18 @@ if menu == "Dashboard":
     )
 
     fig1 = px.bar(
-        abc_count,
-        x="Klasifikasi ABC",
-        y="Jumlah",
-        title="Distribusi Klasifikasi ABC"
-    )
+    abc_count,
+    x="Klasifikasi ABC",
+    y="Jumlah",
+    color="Klasifikasi ABC",
+    text="Jumlah",
+    title="Distribusi Klasifikasi ABC",
+    color_discrete_map={
+        "A": "#28a745",
+        "B": "#ffc107",
+        "C": "#dc3545"
+    }
+)
 
     st.plotly_chart(fig1, use_container_width=True)
 
@@ -291,19 +301,28 @@ if menu == "Dashboard":
     top10 = df.head(10)
 
     fig2 = px.bar(
-        top10,
-        x="Nama Tempat",
-        y="Skor Popularitas",
-        title="Top 10 Tempat Wisata Berdasarkan Skor Popularitas"
-    )
+    top10,
+    x="Nama Tempat",
+    y="Skor Popularitas",
+    text="Skor Popularitas",
+    title="Top 10 Tempat Wisata Berdasarkan Skor Popularitas"
+)
+    fig2.update_traces(
+    texttemplate="%{text:.3f}",
+    textposition="outside"
+)
+    fig2.update_layout(
+    xaxis_title="Nama Tempat Wisata",
+    yaxis_title="Skor Popularitas"
+)
 
     st.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("Rekomendasi Wisata Berdasarkan Filter")
+    st.subheader("Rekomendasi Wisata Berdasarkan Budget dan Kategori")
 
-    rekomendasi = hasil[
-        hasil["Klasifikasi ABC"] == "A"
-    ]
+    st.write(
+        f"Budget maksimal yang dipilih: **Rp{budget:,.0f}**"
+    )
 
     st.dataframe(
         rekomendasi[
@@ -418,12 +437,8 @@ elif menu == "Hasil ABC Analysis":
 
     st.subheader("Tabel Hasil Analisis Berdasarkan Urutan Popularitas")
 
-    st.write(
-        f"Jumlah data yang tampil berdasarkan filter: **{len(hasil)}**"
-    )
-
     st.dataframe(
-        hasil[
+        df[
             [
                 "Urutan Popularitas",
                 "Nama Tempat",
@@ -446,7 +461,7 @@ elif menu == "Hasil ABC Analysis":
     st.subheader("Proporsi Klasifikasi ABC")
 
     abc_count = (
-        hasil.groupby("Klasifikasi ABC")
+        df.groupby("Klasifikasi ABC")
         .size()
         .reset_index(name="Jumlah")
     )
