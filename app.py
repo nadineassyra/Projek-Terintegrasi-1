@@ -42,7 +42,8 @@ df = df_awal[
         "Kategori Tempat",
         "Rating Tempat",
         "Harga Masuk",
-        "User Rating"
+        "User Rating",
+        "Wilayah"
     ]
 ].copy()
 
@@ -63,11 +64,12 @@ df["User Rating"] = pd.to_numeric(df["User Rating"], errors="coerce")
 data_bermasalah = df[
     df[
         [
-            "Nama Tempat",
-            "Kategori Tempat",
-            "Rating Tempat",
-            "Harga Masuk",
-            "User Rating"
+        "Nama Tempat",
+        "Kategori Tempat",
+        "Rating Tempat",
+        "Harga Masuk",
+        "User Rating",
+        "Wilayah"
         ]
     ].isnull().any(axis=1)
 ]
@@ -84,6 +86,7 @@ df["Kategori Tempat"] = df["Kategori Tempat"].fillna("Tidak Diketahui")
 df["Rating Tempat"] = df["Rating Tempat"].fillna(df["Rating Tempat"].mean())
 df["Harga Masuk"] = df["Harga Masuk"].fillna(0)
 df["User Rating"] = df["User Rating"].fillna(0)
+df["Wilayah"] = df["Wilayah"].fillna("Tidak Diketahui")
 
 
 jumlah_data_bersih = len(df)
@@ -101,7 +104,8 @@ df_sebelum_normalisasi = df[
         "Kategori Tempat",
         "Rating Tempat",
         "Harga Masuk",
-        "User Rating"
+        "User Rating",
+        "Wilayah"
     ]
 ].copy()
 
@@ -266,35 +270,206 @@ if menu == "Dashboard":
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("Total Data", len(df))
-    col2.metric("Kategori A", len(df[df["Klasifikasi ABC"] == "A"]))
-    col3.metric("Kategori B", len(df[df["Klasifikasi ABC"] == "B"]))
-    col4.metric("Kategori C", len(df[df["Klasifikasi ABC"] == "C"]))
+    col2.metric("Kategori A (Paling Populer)", len(df[df["Klasifikasi ABC"] == "A"]))
+    col3.metric("Kategori B (Cukup Populer)", len(df[df["Klasifikasi ABC"] == "B"]))
+    col4.metric("Kategori C (Kurang Populer)", len(df[df["Klasifikasi ABC"] == "C"]))
 
     st.markdown("---")
 
     st.subheader("Distribusi Klasifikasi ABC")
-
+    
+    label_map = {
+    "A": "A (Paling Populer)",
+    "B": "B (Cukup Populer)",
+    "C": "C (Kurang Populer)"
+    }
+    
     abc_count = (
         df.groupby("Klasifikasi ABC")
         .size()
         .reset_index(name="Jumlah")
     )
-
+    
+    abc_count["Klasifikasi ABC Label"] = abc_count["Klasifikasi ABC"].map(label_map)
+    
     fig1 = px.bar(
     abc_count,
-    x="Klasifikasi ABC",
+    x="Klasifikasi ABC Label",
     y="Jumlah",
-    color="Klasifikasi ABC",
+    color="Klasifikasi ABC Label",
     text="Jumlah",
-    title="Distribusi Klasifikasi ABC",
     color_discrete_map={
-        "A": "#28a745",
-        "B": "#ffc107",
-        "C": "#dc3545"
+        "A (Paling Populer)": "#2056a7",
+        "B (Cukup Populer)": "#70ab0b",
+        "C (Kurang Populer)": "#bc4a19"
+    },
+    category_orders={
+        "Klasifikasi ABC Label": [
+            "A (Paling Populer)",
+            "B (Cukup Populer)",
+            "C (Kurang Populer)"
+        ]
+    }
+)
+    fig1.update_traces(textposition="outside")
+    
+    fig1.update_layout(
+    xaxis_title="Klasifikasi ABC",
+    legend_title_text="Klasifikasi ABC"
+)
+    st.plotly_chart(fig1, use_container_width=True)
+
+
+    # ==================================================
+# CHART 1 - DISTRIBUSI KATEGORI WISATA
+# ==================================================
+
+    st.subheader("Distribusi Kategori Wisata")
+
+    kategori_count = (
+        df.groupby("Kategori Tempat")
+        .size()
+        .reset_index(name="Jumlah")
+        .sort_values(by="Jumlah", ascending=False)
+)
+
+    fig_kategori = px.bar(
+    kategori_count,
+    x="Kategori Tempat",
+    y="Jumlah",
+    text="Jumlah",
+    color="Kategori Tempat",
+    color_discrete_map={
+        "Cagar Alam": "#198754",
+        "Taman Hiburan": "#0d6efd",
+        "Budaya": "#fd7e14",
+        "Tempat Ibadah": "#6f42c1",
+        "Pusat Perbelanjaan": "#dc3545"
     }
 )
 
-    st.plotly_chart(fig1, use_container_width=True)
+    fig_kategori.update_traces(
+        textposition="outside"
+)
+
+    fig_kategori.update_layout(
+        xaxis_title="Kategori Wisata",
+        yaxis_title="Jumlah Tempat Wisata"
+)
+
+    st.plotly_chart(fig_kategori, use_container_width=True)
+
+
+# distribusi klasifikasi abc berdasarkan wilayah
+
+    st.subheader("Distribusi Klasifikasi ABC Berdasarkan Wilayah")
+
+    wilayah_abc = (
+        df.groupby(["Wilayah", "Klasifikasi ABC"])
+        .size()
+        .reset_index(name="Jumlah")
+)
+
+    fig_wilayah_abc = px.bar(
+        wilayah_abc,
+        x="Wilayah",
+        y="Jumlah",
+        color="Klasifikasi ABC",
+        text="Jumlah",
+        barmode="group",
+        color_discrete_map={
+            "A": "#2056a7",
+            "B": "#70ab0b",
+            "C": "#bc4a19"
+    }
+)
+
+    fig_wilayah_abc.update_traces(
+        textposition="outside"
+)
+
+    fig_wilayah_abc.update_layout(
+        xaxis_title="Wilayah",
+        yaxis_title="Jumlah Tempat Wisata",
+        legend_title_text="Klasifikasi ABC"
+)
+
+    st.plotly_chart(fig_wilayah_abc, use_container_width=True)
+
+
+# distribusi wisata kategori a berdasarkan wilayah
+    st.subheader("Distribusi Wisata Kategori A Berdasarkan Wilayah")
+
+    wilayah_a = (
+        df[df["Klasifikasi ABC"] == "A"]
+        .groupby("Wilayah")
+        .size()
+        .reset_index(name="Jumlah")
+        .sort_values(by="Jumlah", ascending=False)
+)
+
+    fig_wilayah_a = px.bar(
+        wilayah_a,
+        x="Wilayah",
+        y="Jumlah",
+        text="Jumlah",
+        color="Wilayah"
+)
+
+    fig_wilayah_a.update_traces(
+        textposition="outside"
+)
+
+    fig_wilayah_a.update_layout(
+        xaxis_title="Wilayah",
+        yaxis_title="Jumlah Wisata Kategori A",
+        showlegend=False
+)
+
+    st.plotly_chart(fig_wilayah_a, use_container_width=True)
+
+
+# ==================================================
+# CHART 4 - KATEGORI A PER KATEGORI WISATA
+# ==================================================
+
+    st.subheader("Distribusi Wisata Kategori A Berdasarkan Jenis Wisata")
+
+    kategori_a = df[df["Klasifikasi ABC"] == "A"]
+
+    kategori_a_count = (
+        kategori_a.groupby("Kategori Tempat")
+        .size()
+        .reset_index(name="Jumlah")
+        .sort_values(by="Jumlah", ascending=False)
+)
+
+    fig_kategori_a = px.bar(
+    kategori_a_count,
+    x="Kategori Tempat",
+    y="Jumlah",
+    text="Jumlah",
+    color="Kategori Tempat",
+    color_discrete_map={
+        "Cagar Alam": "#198754",
+        "Taman Hiburan": "#0d6efd",
+        "Budaya": "#fd7e14",
+        "Tempat Ibadah": "#6f42c1",
+        "Pusat Perbelanjaan": "#dc3545"
+    }
+)
+
+    fig_kategori_a.update_traces(
+        textposition="outside"
+)
+
+    fig_kategori_a.update_layout(
+        xaxis_title="Kategori Wisata",
+        yaxis_title="Jumlah Wisata Kategori A"
+)
+
+    st.plotly_chart(fig_kategori_a, use_container_width=True)
+
 
     st.subheader("Top 10 Tempat Wisata Berdasarkan Skor Popularitas")
 
@@ -305,7 +480,6 @@ if menu == "Dashboard":
     x="Nama Tempat",
     y="Skor Popularitas",
     text="Skor Popularitas",
-    title="Top 10 Tempat Wisata Berdasarkan Skor Popularitas"
 )
     fig2.update_traces(
     texttemplate="%{text:.3f}",
@@ -317,8 +491,10 @@ if menu == "Dashboard":
 )
 
     st.plotly_chart(fig2, use_container_width=True)
+    
 
     st.subheader("Rekomendasi Wisata Berdasarkan Budget dan Kategori")
+    st.write("Rekomendasi berdasarkan kategori A (Paling Populer) hasil ABC Analysis")
 
     st.write(
         f"Budget maksimal yang dipilih: **Rp{budget:,.0f}**"
@@ -470,7 +646,6 @@ elif menu == "Hasil ABC Analysis":
         abc_count,
         names="Klasifikasi ABC",
         values="Jumlah",
-        title="Proporsi Klasifikasi ABC"
     )
 
     st.plotly_chart(fig3, use_container_width=True)
