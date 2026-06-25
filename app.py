@@ -427,9 +427,8 @@ if menu == "Dashboard":
     else:
         col2.metric("Rating Tertinggi", "-")
         col3.metric("Harga Termurah", "-")
-    
-    st.warning(
-    "Tidak ditemukan rekomendasi yang sesuai. Coba naikkan budget atau pilih kategori lain."
+        st.warning(
+            "Tidak ditemukan rekomendasi yang sesuai. Coba naikkan budget atau pilih kategori lain."
 )
     
 if menu == "Preprocessing":
