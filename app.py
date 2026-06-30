@@ -2,59 +2,122 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+# =========================
+# KONFIGURASI HALAMAN
+# =========================
+
 st.set_page_config(
     page_title="Analisis Wisata Bandung",
     layout="wide"
 )
 
 # =========================
-# LOAD DATA HASIL COLAB
+# WARNA KLASIFIKASI ABC
 # =========================
 
-df = pd.read_csv("dataset/hasil_abc_wisata_bandung.csv")
+COLOR_ABC = {
+    "A": "#2056a7",
+    "B": "#70ab0b",
+    "C": "#bc4a19"
+}
 
-df = df.rename(columns={
-    "Popularitas": "Skor Popularitas",
-    "Kategori ABC": "Klasifikasi ABC",
-    "User Rating": "Jumlah Ulasan",
-    "Harga Masuk": "Harga Tiket Masuk"
-})
+# =========================
+# FUNGSI BANTUAN
+# =========================
+
+def format_rupiah(nilai):
+    if pd.isna(nilai):
+        return "-"
+    return f"Rp {nilai:,.0f}".replace(",", ".")
+
+
+def ambil_kolom_tersedia(dataframe, daftar_kolom):
+    return [kolom for kolom in daftar_kolom if kolom in dataframe.columns]
 
 
 # =========================
-# LOAD DATA ALAMAT & GOOGLE MAPS KATEGORI A
+# LOAD DATA
 # =========================
 
-df_maps = pd.read_csv("dataset/kategori_a_dengan_alamat_google_maps.csv")
+@st.cache_data
+def load_data():
+    df = pd.read_csv("dataset/hasil_abc_wisata_bandung.csv")
 
-# Ambil kolom yang dibutuhkan saja
-df_maps = df_maps[
-    [
-        "Nama Tempat",
-        "Alamat",
-        "Google Maps"
+    # Menyamakan nama kolom
+    df = df.rename(columns={
+        "Popularitas": "Skor Popularitas",
+        "Kategori ABC": "Klasifikasi ABC",
+        "User Rating": "Jumlah Ulasan",
+        "Harga Masuk": "Harga Tiket Masuk"
+    })
+
+    # Membersihkan nama tempat
+    df["Nama Tempat"] = df["Nama Tempat"].astype(str).str.strip()
+
+    # Mengubah kolom numerik
+    kolom_numerik = [
+        "Rating Tempat",
+        "Jumlah Ulasan",
+        "Harga Tiket Masuk",
+        "Skor Popularitas",
+        "Persentase Kontribusi",
+        "Persentase Kumulatif"
     ]
-].copy()
 
-# Bersihkan spasi agar nama tempat cocok saat digabung
-df["Nama Tempat"] = df["Nama Tempat"].astype(str).str.strip()
-df_maps["Nama Tempat"] = df_maps["Nama Tempat"].astype(str).str.strip()
+    for kolom in kolom_numerik:
+        if kolom in df.columns:
+            df[kolom] = pd.to_numeric(df[kolom], errors="coerce")
 
-# Gabungkan alamat dan URL Google Maps ke dataframe utama
-df = df.merge(
-    df_maps,
-    on="Nama Tempat",
-    how="left"
-)
+    # =========================
+    # LOAD DATA ALAMAT & GOOGLE MAPS
+    # =========================
 
+    try:
+        df_maps = pd.read_csv("dataset/kategori_a_dengan_alamat_google_maps.csv")
 
-df = df.sort_values(by="Skor Popularitas", ascending=False).reset_index(drop=True)
+        df_maps = df_maps.rename(columns={
+            "ALAMAT": "Alamat",
+            "URL": "Google Maps"
+        })
 
-if "Urutan Popularitas" not in df.columns:
+        kolom_maps = ambil_kolom_tersedia(
+            df_maps,
+            ["Nama Tempat", "Alamat", "Google Maps"]
+        )
+
+        df_maps = df_maps[kolom_maps].copy()
+        df_maps["Nama Tempat"] = df_maps["Nama Tempat"].astype(str).str.strip()
+
+        # Menghindari kolom ganda jika data utama sudah punya alamat/link
+        df = df.drop(columns=["Alamat", "Google Maps"], errors="ignore")
+
+        df = df.merge(
+            df_maps,
+            on="Nama Tempat",
+            how="left"
+        )
+
+    except FileNotFoundError:
+        df["Alamat"] = ""
+        df["Google Maps"] = ""
+
+    # Mengurutkan berdasarkan skor popularitas
+    df = df.sort_values(
+        by="Skor Popularitas",
+        ascending=False
+    ).reset_index(drop=True)
+
+    # Membuat ulang urutan popularitas agar konsisten
+    df = df.drop(columns=["Urutan Popularitas"], errors="ignore")
     df.insert(0, "Urutan Popularitas", range(1, len(df) + 1))
 
+    return df
+
+
+df = load_data()
+
 # =========================
-# HEADER
+# HEADER UTAMA
 # =========================
 
 st.title("📍 Analisis Tempat Wisata Bandung")
@@ -81,21 +144,27 @@ st.sidebar.header("Filter Data")
 
 kategori_filter = st.sidebar.selectbox(
     "Kategori Wisata",
-    ["Semua"] + sorted(df["Kategori Tempat"].unique())
+    ["Semua"] + sorted(df["Kategori Tempat"].dropna().unique())
 )
 
 abc_filter = st.sidebar.selectbox(
     "Klasifikasi ABC",
-    ["Semua"] + sorted(df["Klasifikasi ABC"].unique())
+    ["Semua"] + sorted(df["Klasifikasi ABC"].dropna().unique())
 )
+
+max_budget = int(df["Harga Tiket Masuk"].max()) if len(df) > 0 else 0
 
 budget = st.sidebar.slider(
     "💰 Budget Maksimal",
     min_value=0,
-    max_value=int(df["Harga Tiket Masuk"].max()),
+    max_value=max_budget,
     value=50000,
     step=5000
 )
+
+# =========================
+# FILTER DATA UMUM
+# =========================
 
 df_filter = df.copy()
 
@@ -113,355 +182,234 @@ if menu == "Dashboard":
 
     st.header("📊 Dashboard Analisis Wisata")
 
-    col1, col2, col3, col4 = st.columns(4)
+    if len(df_filter) == 0:
+        st.warning("Tidak ada data yang sesuai dengan filter yang dipilih.")
 
-    col1.metric("Total Wisata", len(df_filter))
-    col2.metric("Kategori A", len(df_filter[df_filter["Klasifikasi ABC"] == "A"]))
-    col3.metric("Kategori B", len(df_filter[df_filter["Klasifikasi ABC"] == "B"]))
-    col4.metric("Kategori C", len(df_filter[df_filter["Klasifikasi ABC"] == "C"]))
+    else:
+        # =========================
+        # METRIC RINGKASAN
+        # =========================
 
-    st.markdown("---")
+        col1, col2, col3, col4 = st.columns(4)
 
-    col_left, col_right = st.columns(2)
+        col1.metric("Total Wisata", len(df_filter))
+        col2.metric("Kategori A", len(df_filter[df_filter["Klasifikasi ABC"] == "A"]))
+        col3.metric("Kategori B", len(df_filter[df_filter["Klasifikasi ABC"] == "B"]))
+        col4.metric("Kategori C", len(df_filter[df_filter["Klasifikasi ABC"] == "C"]))
 
-    with col_left:
-        st.subheader("Proporsi Klasifikasi ABC")
+        col5, col6 = st.columns(2)
 
-        abc_count = (
-            df_filter.groupby("Klasifikasi ABC")
-            .size()
-            .reset_index(name="Jumlah")
+        col5.metric(
+            "Rating Tertinggi",
+            f"{df_filter['Rating Tempat'].max():.1f}"
         )
 
-        fig_pie_abc = px.pie(
-            abc_count,
-            names="Klasifikasi ABC",
-            values="Jumlah",
-            hole=0.35,
-            color="Klasifikasi ABC",
-            color_discrete_map={
-                "A": "#2056a7",
-                "B": "#70ab0b",
-                "C": "#bc4a19"
-            }
+        col6.metric(
+            "Harga Termurah",
+            format_rupiah(df_filter["Harga Tiket Masuk"].min())
         )
 
-        fig_pie_abc.update_traces(textinfo="label+percent+value")
-        st.plotly_chart(fig_pie_abc, use_container_width=True)
-        
-        
-        st.subheader("Distribusi Kategori Wisata per Kategori ABC")
+        st.markdown("---")
 
-        distribusi_kategori = (
-            df_filter.groupby(["Kategori Tempat", "Klasifikasi ABC"])
-            .size()
-            .reset_index(name="Jumlah")
-)
+        # =========================
+        # PROPORSI ABC DAN TOP 10
+        # =========================
 
-    fig = px.bar(
-        distribusi_kategori,
-        x="Kategori Tempat",
-        y="Jumlah",
-        color="Klasifikasi ABC",
-        barmode="group",
-        text="Jumlah",
-        color_discrete_map={
-        "A":"#2056a7",
-        "B":"#70ab0b",
-        "C":"#bc4a19"
-    }
-)
+        col_left, col_right = st.columns(2)
 
-    fig.update_traces(textposition="outside")
+        with col_left:
+            st.subheader("Proporsi Klasifikasi ABC")
 
-    st.plotly_chart(fig,use_container_width=True)
+            abc_count = (
+                df_filter.groupby("Klasifikasi ABC")
+                .size()
+                .reset_index(name="Jumlah")
+            )
 
+            fig_pie_abc = px.pie(
+                abc_count,
+                names="Klasifikasi ABC",
+                values="Jumlah",
+                hole=0.35,
+                color="Klasifikasi ABC",
+                color_discrete_map=COLOR_ABC
+            )
 
-    with col_left:
-        st.subheader("Distribusi Klasifikasi ABC Berdasarkan Wilayah")
+            fig_pie_abc.update_traces(textinfo="label+percent+value")
+            st.plotly_chart(fig_pie_abc, use_container_width=True)
 
-    wilayah_abc = (
-        df_filter.groupby(["Wilayah", "Klasifikasi ABC"])
-        .size()
-        .reset_index(name="Jumlah")
-    )
+        with col_right:
+            st.subheader("Top 10 Tempat Wisata Kategori A")
 
-    fig_wilayah = px.bar(
-        wilayah_abc,
-        x="Wilayah",
-        y="Jumlah",
-        color="Klasifikasi ABC",
-        text="Jumlah",
-        barmode="group",
-        color_discrete_map={
-            "A": "#2056a7",
-            "B": "#70ab0b",
-            "C": "#bc4a19"
-        }
-    )
+            data_top10 = df.copy()
 
-    fig_wilayah.update_traces(textposition="outside")
-    fig_wilayah.update_layout(
-        xaxis_title="Wilayah",
-        yaxis_title="Jumlah Tempat Wisata"
-    )
-
-    st.plotly_chart(fig_wilayah, use_container_width=True)
-
-
-    st.subheader("Distribusi Wisata Kategori A Berdasarkan Jenis Wisata")
-
-    kategori_a = (
-        df_filter[df_filter["Klasifikasi ABC"]=="A"]
-)
-
-    kategori_a_count = (
-        kategori_a.groupby("Kategori Tempat")
-        .size()
-        .reset_index(name="Jumlah")
-        .sort_values(by="Jumlah",ascending=False)
-)
-
-    fig = px.bar(
-        kategori_a_count,
-        x="Kategori Tempat",
-        y="Jumlah",
-        color="Kategori Tempat",
-        text="Jumlah"
-)
-
-    fig.update_traces(textposition="outside")
-
-    st.plotly_chart(fig,use_container_width=True)
-
-
-    st.subheader("Distribusi Wisata Kategori A Berdasarkan Wilayah")
-
-    wilayah_a = (
-        df_filter[df_filter["Klasifikasi ABC"]=="A"]
-)
-
-    wilayah_count = (
-        wilayah_a.groupby("Wilayah")
-        .size()
-        .reset_index(name="Jumlah")
-        .sort_values(by="Jumlah",ascending=False)
-)
-
-    fig = px.bar(
-        wilayah_count,
-        x="Wilayah",
-        y="Jumlah",
-        color="Wilayah",
-        text="Jumlah"
-)
-
-    fig.update_traces(textposition="outside")
-
-    st.plotly_chart(fig,use_container_width=True)
-
-    with col_right:
-        st.subheader("Top 10 Tempat Wisata Berdasarkan Skor Popularitas")
-        
-        data_top10 = df.copy()
-        
-        data_top10 = data_top10[
-            (data_top10["Harga Tiket Masuk"] <= budget) &
-            (data_top10["Klasifikasi ABC"] == "A")
-            ]
-        
-        if kategori_filter != "Semua":
             data_top10 = data_top10[
-                data_top10["Kategori Tempat"] == kategori_filter
+                (data_top10["Harga Tiket Masuk"] <= budget) &
+                (data_top10["Klasifikasi ABC"] == "A")
+            ]
+
+            if kategori_filter != "Semua":
+                data_top10 = data_top10[
+                    data_top10["Kategori Tempat"] == kategori_filter
                 ]
-            
-        top10 = (
-            data_top10
-            .sort_values(
-                by=["Skor Popularitas", "Urutan Popularitas"],
-                ascending=[False, True]
+
+            top10 = (
+                data_top10
+                .sort_values(
+                    by=["Skor Popularitas", "Urutan Popularitas"],
+                    ascending=[False, True]
                 )
-            .head(10)
-            )
-        
-# Dibalik khusus untuk tampilan horizontal bar
-        top10_plot = top10.sort_values(
-            by=["Skor Popularitas", "Urutan Popularitas"],
-            ascending=[True, False]
+                .head(10)
             )
 
-        fig_top10 = px.bar(
-            top10_plot,
-            x="Skor Popularitas",
-            y="Nama Tempat",
-            orientation="h",
-            text="Skor Popularitas",
-            color="Klasifikasi ABC",
-            color_discrete_map={
-                "A": "#2056a7",
-                "B": "#70ab0b",
-                "C": "#bc4a19"
-            }
-        )
+            if len(top10) == 0:
+                st.warning("Tidak ada data Top 10 yang sesuai dengan budget dan kategori wisata.")
+            else:
+                top10_plot = top10.sort_values(
+                    by=["Skor Popularitas", "Urutan Popularitas"],
+                    ascending=[True, False]
+                )
 
-        fig_top10.update_traces(
-            texttemplate="%{text:.3f}", 
-            textposition="outside"
-            )
-        
-        fig_top10.update_layout(
-            xaxis_title="Skor Popularitas",
-            yaxis_title="Nama Tempat Wisata"
-        )
+                fig_top10 = px.bar(
+                    top10_plot,
+                    x="Skor Popularitas",
+                    y="Nama Tempat",
+                    orientation="h",
+                    text="Skor Popularitas",
+                    color="Klasifikasi ABC",
+                    color_discrete_map=COLOR_ABC
+                )
 
-        st.plotly_chart(fig_top10, use_container_width=True)
+                fig_top10.update_traces(
+                    texttemplate="%{text:.3f}",
+                    textposition="outside"
+                )
+
+                fig_top10.update_layout(
+                    xaxis_title="Skor Popularitas",
+                    yaxis_title="Nama Tempat Wisata"
+                )
+
+                st.plotly_chart(fig_top10, use_container_width=True)
 
         st.markdown("---")
 
+        # =========================
+        # DISTRIBUSI KATEGORI A
+        # =========================
 
-    col_left, col_right = st.columns(2)
+        kategori_a = df.copy()
 
-    with col_left:
-        st.subheader("Hubungan Rating Tempat dengan Jumlah Ulasan")
+        kategori_a = kategori_a[kategori_a["Klasifikasi ABC"] == "A"]
 
-        fig_scatter = px.scatter(
-            df_filter,
-            x="Rating Tempat",
-            y="Jumlah Ulasan",
-            color="Klasifikasi ABC",
-            size="Skor Popularitas",
-            hover_name="Nama Tempat",
-            hover_data={
-                "Kategori Tempat": True,
-                "Harga Tiket Masuk": True,
-                "Skor Popularitas": ":.3f"
-            },
-            color_discrete_map={
-                "A": "#2056a7",
-                "B": "#70ab0b",
-                "C": "#bc4a19"
-            }
-        )
+        if kategori_filter != "Semua":
+            kategori_a = kategori_a[kategori_a["Kategori Tempat"] == kategori_filter]
 
-        fig_scatter.update_layout(
-            xaxis_title="Rating Tempat",
-            yaxis_title="Jumlah Ulasan"
-        )
+        col_left, col_right = st.columns(2)
 
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        with col_left:
+            st.subheader("Distribusi Wisata Kategori A Berdasarkan Kategori Wisata")
 
-    with col_right:
-        st.subheader("Histogram Harga Tiket Masuk")
+            kategori_a_count = (
+                kategori_a.groupby("Kategori Tempat")
+                .size()
+                .reset_index(name="Jumlah")
+                .sort_values(by="Jumlah", ascending=False)
+            )
 
-        fig_hist_harga = px.histogram(
-            df_filter,
-            x="Harga Tiket Masuk",
-            nbins=20,
-            color="Klasifikasi ABC",
-            color_discrete_map={
-                "A": "#2056a7",
-                "B": "#70ab0b",
-                "C": "#bc4a19"
-            }
-        )
+            if len(kategori_a_count) == 0:
+                st.warning("Tidak ada data kategori A untuk kategori wisata yang dipilih.")
+            else:
+                fig_kategori_a = px.bar(
+                    kategori_a_count,
+                    x="Kategori Tempat",
+                    y="Jumlah",
+                    color="Kategori Tempat",
+                    text="Jumlah"
+                )
 
-        fig_hist_harga.update_layout(
-            xaxis_title="Harga Tiket Masuk",
-            yaxis_title="Jumlah Tempat Wisata"
-        )
+                fig_kategori_a.update_traces(textposition="outside")
 
-        st.plotly_chart(fig_hist_harga, use_container_width=True)
+                fig_kategori_a.update_layout(
+                    xaxis_title="Kategori Tempat",
+                    yaxis_title="Jumlah",
+                    showlegend=True
+                )
 
-    st.markdown("---")
+                st.plotly_chart(fig_kategori_a, use_container_width=True)
 
-    col_left, col_right = st.columns(2)
+        with col_right:
+            st.subheader("Distribusi Wisata Kategori A Berdasarkan Wilayah")
 
-    with col_left:
-        st.subheader("Boxplot Skor Popularitas")
+            wilayah_a_count = (
+                kategori_a.groupby("Wilayah")
+                .size()
+                .reset_index(name="Jumlah")
+                .sort_values(by="Jumlah", ascending=False)
+            )
 
-        fig_box_pop = px.box(
-            df_filter,
-            x="Klasifikasi ABC",
-            y="Skor Popularitas",
-            color="Klasifikasi ABC",
-            points="all",
-            hover_name="Nama Tempat",
-            color_discrete_map={
-                "A": "#2056a7",
-                "B": "#70ab0b",
-                "C": "#bc4a19"
-            }
-        )
+            if len(wilayah_a_count) == 0:
+                st.warning("Tidak ada data kategori A untuk wilayah yang dipilih.")
+            else:
+                fig_wilayah_a = px.bar(
+                    wilayah_a_count,
+                    x="Wilayah",
+                    y="Jumlah",
+                    color="Wilayah",
+                    text="Jumlah"
+                )
 
-        fig_box_pop.update_layout(
-            xaxis_title="Klasifikasi ABC",
-            yaxis_title="Skor Popularitas"
-        )
+                fig_wilayah_a.update_traces(textposition="outside")
 
-        st.plotly_chart(fig_box_pop, use_container_width=True)
+                fig_wilayah_a.update_layout(
+                    xaxis_title="Wilayah",
+                    yaxis_title="Jumlah",
+                    showlegend=True
+                )
 
-    with col_right:
-        st.subheader("Distribusi Tempat Wisata Berdasarkan Kategori")
+                st.plotly_chart(fig_wilayah_a, use_container_width=True)
 
-        kategori_count = (
-            df_filter.groupby("Kategori Tempat")
-            .size()
-            .reset_index(name="Jumlah")
-            .sort_values(by="Jumlah", ascending=True)
-        )
-
-        fig_kategori = px.bar(
-            kategori_count,
-            x="Jumlah",
-            y="Kategori Tempat",
-            orientation="h",
-            text="Jumlah",
-            color="Kategori Tempat"
-        )
-
-        fig_kategori.update_traces(textposition="outside")
-        fig_kategori.update_layout(
-            xaxis_title="Jumlah Tempat Wisata",
-            yaxis_title="Kategori Wisata",
-            showlegend=False
-        )
-
-        st.plotly_chart(fig_kategori, use_container_width=True)
+        # =========================
+        # REKOMENDASI WISATA
+        # =========================
 
         st.markdown("---")
+        st.header("🎯 Rekomendasi Tempat Wisata")
 
+        st.write(
+            "Rekomendasi ditampilkan untuk tempat wisata kategori A berdasarkan hasil klasifikasi ABC, "
+            "budget pengguna, dan kategori wisata yang dipilih."
+        )
 
-# =========================
-# REKOMENDASI WISATA
-# =========================
+        rekomendasi = df.copy()
 
-    st.markdown("---")
-    st.header("🎯 Rekomendasi Tempat Wisata")
-    st.write("Rekomendasi ditampilkan untuk tempat wisata kategori A berdasarkan hasil klasifikasi ABC, budget pengguna, dan kategori wisata yang dipilih.")
-    rekomendasi = df.copy()
-
-    rekomendasi = rekomendasi[
-        (rekomendasi["Harga Tiket Masuk"] <= budget) &
-        (rekomendasi["Klasifikasi ABC"] == "A")
-]
-
-    if kategori_filter != "Semua":
         rekomendasi = rekomendasi[
-            rekomendasi["Kategori Tempat"] == kategori_filter
-    ]
-    
+            (rekomendasi["Harga Tiket Masuk"] <= budget) &
+            (rekomendasi["Klasifikasi ABC"] == "A")
+        ]
+
+        if kategori_filter != "Semua":
+            rekomendasi = rekomendasi[
+                rekomendasi["Kategori Tempat"] == kategori_filter
+            ]
+
+        rekomendasi = rekomendasi.sort_values(
+            by=["Skor Popularitas", "Urutan Popularitas"],
+            ascending=[False, True]
+        )
+
         col1, col2, col3 = st.columns(3)
-    
+
         col1.metric("Jumlah Rekomendasi", len(rekomendasi))
 
-    if len(rekomendasi) > 0:
-        col2.metric("Rating Tertinggi", f"{rekomendasi['Rating Tempat'].max():.1f}")
-        col3.metric("Harga Termurah", f"Rp {rekomendasi['Harga Tiket Masuk'].min():,.0f}")
+        if len(rekomendasi) > 0:
+            col2.metric("Rating Tertinggi", f"{rekomendasi['Rating Tempat'].max():.1f}")
+            col3.metric("Harga Termurah", format_rupiah(rekomendasi["Harga Tiket Masuk"].min()))
 
-        st.success(f"Ditemukan {len(rekomendasi)} tempat wisata sesuai budget dan kategori.")
+            st.success(f"Ditemukan {len(rekomendasi)} tempat wisata sesuai budget dan kategori.")
 
-        st.dataframe(
-            rekomendasi[
+            kolom_rekomendasi = ambil_kolom_tersedia(
+                rekomendasi,
                 [
                     "Urutan Popularitas",
                     "Nama Tempat",
@@ -475,29 +423,39 @@ if menu == "Dashboard":
                     "Alamat",
                     "Google Maps"
                 ]
-            ],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Google Maps": st.column_config.LinkColumn(
-                    "Google Maps",
-                    help="Klik untuk membuka lokasi wisata di Google Maps",
-                    display_text="Buka Maps"
+            )
+
+            st.dataframe(
+                rekomendasi[kolom_rekomendasi],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Google Maps": st.column_config.LinkColumn(
+                        "Google Maps",
+                        help="Klik untuk membuka lokasi wisata di Google Maps",
+                        display_text="Buka Maps"
                     )
                 }
             )
 
-    
-    else:
-        col2.metric("Rating Tertinggi", "-")
-        col3.metric("Harga Termurah", "-")
-        st.warning(
-            "Tidak ditemukan rekomendasi yang sesuai. Coba naikkan budget atau pilih kategori lain."
-)
-    
-if menu == "Preprocessing":
+        else:
+            col2.metric("Rating Tertinggi", "-")
+            col3.metric("Harga Termurah", "-")
+
+            st.warning(
+                "Tidak ditemukan rekomendasi yang sesuai. Coba naikkan budget atau pilih kategori lain."
+            )
+
+# =========================
+# PREPROCESSING
+# =========================
+
+elif menu == "Preprocessing":
+
     st.header("⚙️ Ringkasan Preprocessing Data")
+
     col1, col2, col3, col4 = st.columns(4)
+
     col1.metric("Data Awal", 126)
     col2.metric("Data Setelah Preprocessing", len(df))
     col3.metric("Data Digabung/Dihapus", 2)
@@ -509,9 +467,9 @@ if menu == "Preprocessing":
 
     st.markdown("""
     Dataset yang digunakan pada dashboard ini merupakan dataset akhir hasil preprocessing dari Google Colab.
-    
+
     Tahapan preprocessing yang telah dilakukan meliputi:
-    
+
     1. Pemeriksaan struktur dataset.
     2. Pemeriksaan missing value.
     3. Standardisasi nama destinasi wisata.
@@ -522,33 +480,76 @@ if menu == "Preprocessing":
     8. Perhitungan Ticket Score.
     9. Perhitungan skor popularitas.
     10. Klasifikasi ABC berdasarkan persentase kumulatif.
+    11. Penambahan alamat dan tautan Google Maps untuk mendukung rekomendasi wisata.
     """)
+
+    st.markdown("---")
 
     st.subheader("Data Hasil Preprocessing dan ABC Analysis")
 
-    st.dataframe(
-        df.head(15),
-        use_container_width=True,
-        hide_index=True
-    )
+    kolom_preprocessing = ambil_kolom_tersedia(
+        df_filter,
+        [
+            "Urutan Popularitas",
+            "Nama Tempat",
+            "Kategori Tempat",
+            "Wilayah",
+            "Rating Tempat",
+            "Jumlah Ulasan",
+            "Harga Tiket Masuk",
+            "Skor Popularitas",
+            "Persentase Kumulatif",
+            "Klasifikasi ABC"
+            ]
+        )
+    
+    tab_a, tab_b, tab_c = st.tabs(
+        ["Kategori A", "Kategori B", "Kategori C"]
+        )
 
-    st.subheader("Boxplot Harga Tiket Masuk")
+    with tab_a:
+        data_a = (
+            df_filter[df_filter["Klasifikasi ABC"] == "A"]
+            .sort_values(
+                by=["Skor Popularitas", "Urutan Popularitas"],
+                ascending=[False, True]
+                )
+            )
+        
+        st.dataframe(
+            data_a[kolom_preprocessing],
+            use_container_width=True,
+            hide_index=True
+            )
 
-    fig_box_harga = px.box(
-        df,
-        x="Klasifikasi ABC",
-        y="Harga Tiket Masuk",
-        color="Klasifikasi ABC",
-        points="all",
-        hover_name="Nama Tempat",
-        color_discrete_map={
-            "A": "#2056a7",
-            "B": "#70ab0b",
-            "C": "#bc4a19"
-        }
-    )
+    with tab_b:
+        data_b = (
+            df_filter[df_filter["Klasifikasi ABC"] == "B"]
+            .sort_values(
+                by=["Skor Popularitas", "Urutan Popularitas"],
+                ascending=[False, True]
+                )
+            )
+        
+        st.dataframe(
+            data_b[kolom_preprocessing],
+            use_container_width=True,
+            hide_index=True
+            )
 
-    st.plotly_chart(fig_box_harga, use_container_width=True)
+    with tab_c:
+        data_c = (
+            df_filter[df_filter["Klasifikasi ABC"] == "C"]
+            .sort_values(
+                by=["Skor Popularitas", "Urutan Popularitas"],
+                ascending=[False, True]
+                )
+            )
+        st.dataframe(
+            data_c[kolom_preprocessing],
+            use_container_width=True,
+            hide_index=True
+            )
 
 # =========================
 # HASIL ABC ANALYSIS
@@ -558,78 +559,197 @@ elif menu == "Hasil ABC Analysis":
 
     st.header("📌 Hasil ABC Analysis")
 
-    st.subheader("Ringkasan Klasifikasi ABC")
+    if len(df_filter) == 0:
+        st.warning("Tidak ada data yang sesuai dengan filter yang dipilih.")
 
-    abc_summary = (
-        df.groupby("Klasifikasi ABC")
-        .agg(
-            Jumlah_Tempat=("Nama Tempat", "count"),
-            Rata_Rata_Popularitas=("Skor Popularitas", "mean"),
-            Min_Kumulatif=("Persentase Kumulatif", "min"),
-            Max_Kumulatif=("Persentase Kumulatif", "max")
+    else:
+        # =========================
+        # RINGKASAN ABC
+        # =========================
+
+        st.subheader("Ringkasan Klasifikasi ABC")
+
+        abc_summary = (
+            df_filter.groupby("Klasifikasi ABC")
+            .agg(
+                Jumlah_Tempat=("Nama Tempat", "count"),
+                Rata_Rata_Popularitas=("Skor Popularitas", "mean")
+            )
+            .reset_index()
         )
-        .reset_index()
-    )
 
-    abc_summary["Persentase Data (%)"] = (
-        abc_summary["Jumlah_Tempat"] / len(df) * 100
-    )
+        if "Persentase Kumulatif" in df_filter.columns:
+            kumulatif_summary = (
+                df_filter.groupby("Klasifikasi ABC")
+                .agg(
+                    Min_Kumulatif=("Persentase Kumulatif", "min"),
+                    Max_Kumulatif=("Persentase Kumulatif", "max")
+                )
+                .reset_index()
+            )
 
-    st.dataframe(
-        abc_summary.round(2),
-        use_container_width=True,
-        hide_index=True
-    )
+            abc_summary = abc_summary.merge(
+                kumulatif_summary,
+                on="Klasifikasi ABC",
+                how="left"
+            )
 
-    st.subheader("Proporsi Klasifikasi ABC")
+        abc_summary["Persentase Data (%)"] = (
+            abc_summary["Jumlah_Tempat"] / len(df_filter) * 100
+        )
 
-    abc_count = (
-        df.groupby("Klasifikasi ABC")
-        .size()
-        .reset_index(name="Jumlah")
-    )
+        st.dataframe(
+            abc_summary.round(2),
+            use_container_width=True,
+            hide_index=True
+        )
 
-    fig_abc = px.pie(
-        abc_count,
-        names="Klasifikasi ABC",
-        values="Jumlah",
-        hole=0.35,
-        color="Klasifikasi ABC",
-        color_discrete_map={
-            "A": "#2056a7",
-            "B": "#70ab0b",
-            "C": "#bc4a19"
-        }
-    )
+        st.markdown("---")
 
-    fig_abc.update_traces(textinfo="label+percent+value")
-    st.plotly_chart(fig_abc, use_container_width=True)
+        # =========================
+        # DISTRIBUSI KATEGORI
+        # =========================
 
-    st.markdown("---")
+        col_left, col_right = st.columns(2)
 
-    st.subheader("Top 20 Wisata Kategori A")
+        with col_left:
+            st.subheader("Distribusi Kategori Wisata per Kategori ABC")
 
-    st.dataframe(
-        df[df["Klasifikasi ABC"] == "A"].head(20),
-        use_container_width=True,
-        hide_index=True
-    )
+            distribusi_kategori = (
+                df_filter.groupby(["Kategori Tempat", "Klasifikasi ABC"])
+                .size()
+                .reset_index(name="Jumlah")
+            )
 
-    st.subheader("Top 20 Wisata Kategori B")
+            fig_distribusi_kategori = px.bar(
+                distribusi_kategori,
+                x="Kategori Tempat",
+                y="Jumlah",
+                color="Klasifikasi ABC",
+                barmode="group",
+                text="Jumlah",
+                color_discrete_map=COLOR_ABC
+            )
 
-    st.dataframe(
-        df[df["Klasifikasi ABC"] == "B"].head(20),
-        use_container_width=True,
-        hide_index=True
-    )
+            fig_distribusi_kategori.update_traces(textposition="outside")
 
-    st.subheader("Top 20 Wisata Kategori C")
+            fig_distribusi_kategori.update_layout(
+                xaxis_title="Kategori Tempat",
+                yaxis_title="Jumlah Tempat Wisata"
+            )
 
-    st.dataframe(
-        df[df["Klasifikasi ABC"] == "C"].head(20),
-        use_container_width=True,
-        hide_index=True
-    )
+            st.plotly_chart(fig_distribusi_kategori, use_container_width=True)
+
+
+        # =========================
+        # DISTRIBUSI ABC BERDASARKAN WILAYAH
+        # =========================
+
+        with col_right:
+            st.subheader("Distribusi Klasifikasi ABC Berdasarkan Wilayah")
+            wilayah_abc = (
+            df_filter.groupby(["Wilayah", "Klasifikasi ABC"])
+            .size()
+            .reset_index(name="Jumlah")
+        )
+
+            fig_wilayah_abc = px.bar(
+                wilayah_abc,
+                x="Wilayah",
+                y="Jumlah",
+                color="Klasifikasi ABC",
+                text="Jumlah",
+                barmode="group",
+                color_discrete_map=COLOR_ABC
+        )
+
+            fig_wilayah_abc.update_traces(textposition="outside")
+
+            fig_wilayah_abc.update_layout(
+                xaxis_title="Wilayah",
+                yaxis_title="Jumlah Tempat Wisata"
+        )
+
+            st.plotly_chart(fig_wilayah_abc, use_container_width=True)
+
+        st.markdown("---")
+
+        # =========================
+        # BOXPLOT
+        # =========================
+
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            st.subheader("Boxplot Skor Popularitas")
+
+            fig_box_pop = px.box(
+                df_filter,
+                x="Klasifikasi ABC",
+                y="Skor Popularitas",
+                color="Klasifikasi ABC",
+                points="all",
+                hover_name="Nama Tempat",
+                color_discrete_map=COLOR_ABC
+            )
+
+            fig_box_pop.update_layout(
+                xaxis_title="Klasifikasi ABC",
+                yaxis_title="Skor Popularitas"
+            )
+
+            st.plotly_chart(fig_box_pop, use_container_width=True)
+
+        with col_right:
+            st.subheader("Boxplot Harga Tiket Masuk")
+
+            fig_box_harga = px.box(
+                df_filter,
+                x="Klasifikasi ABC",
+                y="Harga Tiket Masuk",
+                color="Klasifikasi ABC",
+                points="all",
+                hover_name="Nama Tempat",
+                color_discrete_map=COLOR_ABC
+            )
+
+            fig_box_harga.update_layout(
+                xaxis_title="Klasifikasi ABC",
+                yaxis_title="Harga Tiket Masuk"
+            )
+
+            st.plotly_chart(fig_box_harga, use_container_width=True)
+
+        st.markdown("---")
+
+        # =========================
+        # SCATTER 
+        # =========================
+
+        st.subheader("Hubungan Rating Tempat dengan Jumlah Ulasan")
+
+        fig_scatter = px.scatter(
+            df_filter,
+            x="Rating Tempat",
+            y="Jumlah Ulasan",
+            color="Klasifikasi ABC",
+            size="Skor Popularitas",
+            hover_name="Nama Tempat",
+            hover_data={
+                "Kategori Tempat": True,
+                "Harga Tiket Masuk": True,
+                "Skor Popularitas": ":.3f"
+                },
+            color_discrete_map=COLOR_ABC
+            )
+
+        fig_scatter.update_layout(
+            xaxis_title="Rating Tempat",
+            yaxis_title="Jumlah Ulasan"
+            )
+
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
 
 # =========================
 # VALIDASI REFERENSI
@@ -640,7 +760,8 @@ elif menu == "Validasi Referensi":
     st.header("✅ Validasi Hasil Rekomendasi dengan Platform Referensi")
 
     st.write(
-        "Validasi dilakukan dengan membandingkan wisata kategori A terhadap platform referensi seperti Tripadvisor, Traveloka, Trip.com, dan Agoda."
+        "Validasi dilakukan dengan membandingkan wisata kategori A terhadap platform referensi seperti "
+        "Tripadvisor, Traveloka, Trip.com, dan Agoda."
     )
 
     col1, col2, col3, col4 = st.columns(4)
@@ -700,7 +821,8 @@ elif menu == "Validasi Referensi":
 
     st.info(
         "Hasil validasi menunjukkan bahwa sebagian besar wisata kategori A ditemukan pada platform referensi. "
-        "Hal ini menunjukkan bahwa hasil klasifikasi ABC memiliki kesesuaian dengan rekomendasi wisata populer pada platform digital."
+        "Hal ini menunjukkan bahwa hasil klasifikasi ABC memiliki kesesuaian dengan rekomendasi wisata populer "
+        "pada platform digital."
     )
 
 # =========================
