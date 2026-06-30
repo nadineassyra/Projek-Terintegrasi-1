@@ -20,6 +20,34 @@ df = df.rename(columns={
     "Harga Masuk": "Harga Tiket Masuk"
 })
 
+
+# =========================
+# LOAD DATA ALAMAT & GOOGLE MAPS KATEGORI A
+# =========================
+
+df_maps = pd.read_csv("dataset/kategori_a_dengan_alamat_google_maps.csv")
+
+# Ambil kolom yang dibutuhkan saja
+df_maps = df_maps[
+    [
+        "Nama Tempat",
+        "Alamat",
+        "Google Maps"
+    ]
+].copy()
+
+# Bersihkan spasi agar nama tempat cocok saat digabung
+df["Nama Tempat"] = df["Nama Tempat"].astype(str).str.strip()
+df_maps["Nama Tempat"] = df_maps["Nama Tempat"].astype(str).str.strip()
+
+# Gabungkan alamat dan URL Google Maps ke dataframe utama
+df = df.merge(
+    df_maps,
+    on="Nama Tempat",
+    how="left"
+)
+
+
 df = df.sort_values(by="Skor Popularitas", ascending=False).reset_index(drop=True)
 
 if "Urutan Popularitas" not in df.columns:
@@ -149,6 +177,38 @@ if menu == "Dashboard":
     st.plotly_chart(fig,use_container_width=True)
 
 
+    with col_left:
+        st.subheader("Distribusi Klasifikasi ABC Berdasarkan Wilayah")
+
+    wilayah_abc = (
+        df_filter.groupby(["Wilayah", "Klasifikasi ABC"])
+        .size()
+        .reset_index(name="Jumlah")
+    )
+
+    fig_wilayah = px.bar(
+        wilayah_abc,
+        x="Wilayah",
+        y="Jumlah",
+        color="Klasifikasi ABC",
+        text="Jumlah",
+        barmode="group",
+        color_discrete_map={
+            "A": "#2056a7",
+            "B": "#70ab0b",
+            "C": "#bc4a19"
+        }
+    )
+
+    fig_wilayah.update_traces(textposition="outside")
+    fig_wilayah.update_layout(
+        xaxis_title="Wilayah",
+        yaxis_title="Jumlah Tempat Wisata"
+    )
+
+    st.plotly_chart(fig_wilayah, use_container_width=True)
+
+
     st.subheader("Distribusi Wisata Kategori A Berdasarkan Jenis Wisata")
 
     kategori_a = (
@@ -202,15 +262,36 @@ if menu == "Dashboard":
 
     with col_right:
         st.subheader("Top 10 Tempat Wisata Berdasarkan Skor Popularitas")
-
+        
+        data_top10 = df.copy()
+        
+        data_top10 = data_top10[
+            (data_top10["Harga Tiket Masuk"] <= budget) &
+            (data_top10["Klasifikasi ABC"] == "A")
+            ]
+        
+        if kategori_filter != "Semua":
+            data_top10 = data_top10[
+                data_top10["Kategori Tempat"] == kategori_filter
+                ]
+            
         top10 = (
-            df_filter.sort_values(by="Skor Popularitas", ascending=False)
+            data_top10
+            .sort_values(
+                by=["Skor Popularitas", "Urutan Popularitas"],
+                ascending=[False, True]
+                )
             .head(10)
-            .sort_values(by="Skor Popularitas", ascending=True)
-        )
+            )
+        
+# Dibalik khusus untuk tampilan horizontal bar
+        top10_plot = top10.sort_values(
+            by=["Skor Popularitas", "Urutan Popularitas"],
+            ascending=[True, False]
+            )
 
         fig_top10 = px.bar(
-            top10,
+            top10_plot,
             x="Skor Popularitas",
             y="Nama Tempat",
             orientation="h",
@@ -223,7 +304,11 @@ if menu == "Dashboard":
             }
         )
 
-        fig_top10.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+        fig_top10.update_traces(
+            texttemplate="%{text:.3f}", 
+            textposition="outside"
+            )
+        
         fig_top10.update_layout(
             xaxis_title="Skor Popularitas",
             yaxis_title="Nama Tempat Wisata"
@@ -232,6 +317,7 @@ if menu == "Dashboard":
         st.plotly_chart(fig_top10, use_container_width=True)
 
         st.markdown("---")
+
 
     col_left, col_right = st.columns(2)
 
@@ -344,45 +430,14 @@ if menu == "Dashboard":
 
         st.markdown("---")
 
-    with col_left:
-        st.subheader("Distribusi Klasifikasi ABC Berdasarkan Wilayah")
-
-    wilayah_abc = (
-        df_filter.groupby(["Wilayah", "Klasifikasi ABC"])
-        .size()
-        .reset_index(name="Jumlah")
-    )
-
-    fig_wilayah = px.bar(
-        wilayah_abc,
-        x="Wilayah",
-        y="Jumlah",
-        color="Klasifikasi ABC",
-        text="Jumlah",
-        barmode="group",
-        color_discrete_map={
-            "A": "#2056a7",
-            "B": "#70ab0b",
-            "C": "#bc4a19"
-        }
-    )
-
-    fig_wilayah.update_traces(textposition="outside")
-    fig_wilayah.update_layout(
-        xaxis_title="Wilayah",
-        yaxis_title="Jumlah Tempat Wisata"
-    )
-
-    st.plotly_chart(fig_wilayah, use_container_width=True)
-
 
 # =========================
 # REKOMENDASI WISATA
 # =========================
 
     st.markdown("---")
-    st.header("🎯 Rekomendasi Tempat Wisata Berdasarkan Budget")
-    st.write("Rekomendasi Tempat Wisata Berdasarkan Kategori A")
+    st.header("🎯 Rekomendasi Tempat Wisata")
+    st.write("Rekomendasi ditampilkan untuk tempat wisata kategori A berdasarkan hasil klasifikasi ABC, budget pengguna, dan kategori wisata yang dipilih.")
     rekomendasi = df.copy()
 
     rekomendasi = rekomendasi[
@@ -407,21 +462,30 @@ if menu == "Dashboard":
 
         st.dataframe(
             rekomendasi[
-            [
-                "Urutan Popularitas",
-                "Nama Tempat",
-                "Kategori Tempat",
-                "Wilayah",
-                "Rating Tempat",
-                "Jumlah Ulasan",
-                "Harga Tiket Masuk",
-                "Skor Popularitas",
-                "Klasifikasi ABC"
-            ]
-        ],
-        use_container_width=True,
-        hide_index=True
-    )
+                [
+                    "Urutan Popularitas",
+                    "Nama Tempat",
+                    "Kategori Tempat",
+                    "Wilayah",
+                    "Rating Tempat",
+                    "Jumlah Ulasan",
+                    "Harga Tiket Masuk",
+                    "Skor Popularitas",
+                    "Klasifikasi ABC",
+                    "Alamat",
+                    "Google Maps"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Google Maps": st.column_config.LinkColumn(
+                    "Google Maps",
+                    help="Klik untuk membuka lokasi wisata di Google Maps",
+                    display_text="Buka Maps"
+                    )
+                }
+            )
 
     
     else:
