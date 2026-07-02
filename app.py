@@ -48,7 +48,7 @@ def load_data():
         "Popularitas": "Skor Popularitas",
         "Kategori ABC": "Klasifikasi ABC",
         "User Rating": "Jumlah Ulasan",
-        "Harga Masuk": "Harga Tiket Masuk"
+        "Harga Masuk": "Harga Masuk"
     })
 
     # Membersihkan nama tempat
@@ -58,7 +58,7 @@ def load_data():
     kolom_numerik = [
         "Rating Tempat",
         "Jumlah Ulasan",
-        "Harga Tiket Masuk",
+        "Harga Masuk",
         "Skor Popularitas",
         "Persentase Kontribusi",
         "Persentase Kumulatif"
@@ -152,7 +152,7 @@ abc_filter = st.sidebar.selectbox(
     ["Semua"] + sorted(df["Klasifikasi ABC"].dropna().unique())
 )
 
-max_budget = int(df["Harga Tiket Masuk"].max()) if len(df) > 0 else 0
+max_budget = int(df["Harga Masuk"].max()) if len(df) > 0 else 0
 
 budget = st.sidebar.slider(
     "💰 Budget Maksimal",
@@ -206,7 +206,7 @@ if menu == "Dashboard":
 
         col6.metric(
             "Harga Termurah",
-            format_rupiah(df_filter["Harga Tiket Masuk"].min())
+            format_rupiah(df_filter["Harga Masuk"].min())
         )
 
         st.markdown("---")
@@ -244,7 +244,7 @@ if menu == "Dashboard":
             data_top10 = df.copy()
 
             data_top10 = data_top10[
-                (data_top10["Harga Tiket Masuk"] <= budget) &
+                (data_top10["Harga Masuk"] <= budget) &
                 (data_top10["Klasifikasi ABC"] == "A")
             ]
 
@@ -384,7 +384,7 @@ if menu == "Dashboard":
         rekomendasi = df.copy()
 
         rekomendasi = rekomendasi[
-            (rekomendasi["Harga Tiket Masuk"] <= budget) &
+            (rekomendasi["Harga Masuk"] <= budget) &
             (rekomendasi["Klasifikasi ABC"] == "A")
         ]
 
@@ -404,7 +404,7 @@ if menu == "Dashboard":
 
         if len(rekomendasi) > 0:
             col2.metric("Rating Tertinggi", f"{rekomendasi['Rating Tempat'].max():.1f}")
-            col3.metric("Harga Termurah", format_rupiah(rekomendasi["Harga Tiket Masuk"].min()))
+            col3.metric("Harga Termurah", format_rupiah(rekomendasi["Harga Masuk"].min()))
 
             st.success(f"Ditemukan {len(rekomendasi)} tempat wisata sesuai budget dan kategori.")
 
@@ -417,7 +417,7 @@ if menu == "Dashboard":
                     "Wilayah",
                     "Rating Tempat",
                     "Jumlah Ulasan",
-                    "Harga Tiket Masuk",
+                    "Harga Masuk",
                     "Skor Popularitas",
                     "Klasifikasi ABC",
                     "Alamat",
@@ -496,7 +496,7 @@ elif menu == "Preprocessing":
             "Wilayah",
             "Rating Tempat",
             "Jumlah Ulasan",
-            "Harga Tiket Masuk",
+            "Harga Masuk",
             "Skor Popularitas",
             "Persentase Kumulatif",
             "Klasifikasi ABC"
@@ -701,12 +701,12 @@ elif menu == "Hasil ABC Analysis":
             st.plotly_chart(fig_box_pop, use_container_width=True)
 
         with col_right:
-            st.subheader("Boxplot Harga Tiket Masuk")
+            st.subheader("Boxplot Harga Masuk Wisata")
 
             fig_box_harga = px.box(
                 df_filter,
                 x="Klasifikasi ABC",
-                y="Harga Tiket Masuk",
+                y="Harga Masuk",
                 color="Klasifikasi ABC",
                 points="all",
                 hover_name="Nama Tempat",
@@ -715,7 +715,7 @@ elif menu == "Hasil ABC Analysis":
 
             fig_box_harga.update_layout(
                 xaxis_title="Klasifikasi ABC",
-                yaxis_title="Harga Tiket Masuk"
+                yaxis_title="Harga Masuk"
             )
 
             st.plotly_chart(fig_box_harga, use_container_width=True)
@@ -737,7 +737,7 @@ elif menu == "Hasil ABC Analysis":
             hover_name="Nama Tempat",
             hover_data={
                 "Kategori Tempat": True,
-                "Harga Tiket Masuk": True,
+                "Harga Masuk": True,
                 "Skor Popularitas": ":.3f"
                 },
             color_discrete_map=COLOR_ABC
