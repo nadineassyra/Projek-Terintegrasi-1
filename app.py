@@ -133,9 +133,9 @@ menu = st.sidebar.radio(
     "Pilih Halaman",
     [
         "Dashboard",
-        "Preprocessing",
         "Hasil ABC Analysis",
-        "Validasi Referensi"
+        "Validasi Referensi",
+        "Preprocessing"
     ]
 )
 
