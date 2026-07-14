@@ -82,8 +82,15 @@ def load_data():
 
         kolom_maps = ambil_kolom_tersedia(
             df_maps,
-            ["Nama Tempat", "Alamat", "Google Maps"]
-        )
+            [
+                "Nama Tempat",
+                "Alamat",
+                "Google Maps",
+                "Peringkat Validasi",
+                "Platform",
+                "KET"
+                ]
+)
 
         df_maps = df_maps[kolom_maps].copy()
         df_maps["Nama Tempat"] = df_maps["Nama Tempat"].astype(str).str.strip()
@@ -377,8 +384,9 @@ if menu == "Dashboard":
         st.header("🎯 Rekomendasi Tempat Wisata")
 
         st.write(
-            "Rekomendasi ditampilkan untuk tempat wisata kategori A berdasarkan hasil klasifikasi ABC, "
-            "budget pengguna, dan kategori wisata yang dipilih."
+            "Rekomendasi yang ditampilkan merupakan tempat wisata kategori A berdasarkan hasil klasifikasi ABC "
+            "yang sesuai dengan budget pengguna, kategori wisata yang dipilih, serta memiliki status validasi "
+            "\"Sesuai\" terhadap platform referensi."
         )
 
         rekomendasi = df.copy()
@@ -393,10 +401,16 @@ if menu == "Dashboard":
                 rekomendasi["Kategori Tempat"] == kategori_filter
             ]
 
+        rekomendasi = rekomendasi[
+            rekomendasi["KET"].str.strip().str.lower() == "sesuai"
+]
+        rekomendasi = rekomendasi.reset_index(drop=True)
+        rekomendasi["Peringkat"] = range(1, len(rekomendasi) + 1)
+        
         rekomendasi = rekomendasi.sort_values(
             by=["Skor Popularitas", "Urutan Popularitas"],
             ascending=[False, True]
-        )
+)
 
         col1, col2, col3 = st.columns(3)
 
@@ -411,7 +425,7 @@ if menu == "Dashboard":
             kolom_rekomendasi = ambil_kolom_tersedia(
                 rekomendasi,
                 [
-                    "Urutan Popularitas",
+                    "Peringkat",
                     "Nama Tempat",
                     "Kategori Tempat",
                     "Wilayah",
