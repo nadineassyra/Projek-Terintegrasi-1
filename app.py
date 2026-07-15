@@ -12,13 +12,20 @@ st.set_page_config(
 )
 
 # =========================
-# WARNA KLASIFIKASI ABC
+# WARNA 
 # =========================
 
 COLOR_ABC = {
     "A": "#2056a7",
     "B": "#70ab0b",
     "C": "#bc4a19"
+}
+
+COLOR_KATEGORI = {
+    "Cagar Alam": "#2E8B57",
+    "Taman Hiburan": "#F38E12",
+    "Budaya": "#8E44AD",
+    "Tempat Ibadah": "#1F77B4"
 }
 
 # =========================
@@ -200,9 +207,9 @@ if menu == "Dashboard":
         col1, col2, col3, col4 = st.columns(4)
 
         col1.metric("Total Wisata", len(df_filter))
-        col2.metric("Kategori A", len(df_filter[df_filter["Klasifikasi ABC"] == "A"]))
-        col3.metric("Kategori B", len(df_filter[df_filter["Klasifikasi ABC"] == "B"]))
-        col4.metric("Kategori C", len(df_filter[df_filter["Klasifikasi ABC"] == "C"]))
+        col2.metric("Kategori A (Paling Populer)", len(df_filter[df_filter["Klasifikasi ABC"] == "A"]))
+        col3.metric("Kategori B (Cukup Populer)", len(df_filter[df_filter["Klasifikasi ABC"] == "B"]))
+        col4.metric("Kategori C (Kurang Populer)", len(df_filter[df_filter["Klasifikasi ABC"] == "C"]))
 
         col5, col6 = st.columns(2)
 
@@ -232,15 +239,26 @@ if menu == "Dashboard":
                 .size()
                 .reset_index(name="Jumlah")
             )
+            
+            abc_count["Label"] = abc_count["Klasifikasi ABC"].map({
+                "A": "A (Paling Populer)",
+                "B": "B (Cukup Populer)",
+                "C": "C (Kurang Populer)"
+                }
+            )
 
             fig_pie_abc = px.pie(
                 abc_count,
-                names="Klasifikasi ABC",
+                names="Label",      
                 values="Jumlah",
                 hole=0.35,
-                color="Klasifikasi ABC",
-                color_discrete_map=COLOR_ABC
-            )
+                color="Klasifikasi ABC",      
+                color_discrete_map={
+                    "A": "#2056A7",
+                    "B": "#70AB0B",
+                    "C": "#BC4A19"
+    }
+)
 
             fig_pie_abc.update_traces(textinfo="label+percent+value")
             st.plotly_chart(fig_pie_abc, use_container_width=True)
@@ -283,9 +301,8 @@ if menu == "Dashboard":
                     y="Nama Tempat",
                     orientation="h",
                     text="Skor Popularitas",
-                    color="Klasifikasi ABC",
-                    color_discrete_map=COLOR_ABC
-                )
+                    color_discrete_sequence=["#06429A"]
+                    )
 
                 fig_top10.update_traces(
                     texttemplate="%{text:.3f}",
@@ -332,8 +349,9 @@ if menu == "Dashboard":
                     x="Kategori Tempat",
                     y="Jumlah",
                     color="Kategori Tempat",
+                    color_discrete_map=COLOR_KATEGORI,
                     text="Jumlah"
-                )
+                    )
 
                 fig_kategori_a.update_traces(textposition="outside")
 
@@ -362,9 +380,9 @@ if menu == "Dashboard":
                     wilayah_a_count,
                     x="Wilayah",
                     y="Jumlah",
-                    color="Wilayah",
-                    text="Jumlah"
-                )
+                    text="Jumlah",
+                    color_discrete_sequence=["#4F81BD"]
+                    )
 
                 fig_wilayah_a.update_traces(textposition="outside")
 
@@ -518,7 +536,7 @@ elif menu == "Preprocessing":
         )
     
     tab_a, tab_b, tab_c = st.tabs(
-        ["Kategori A", "Kategori B", "Kategori C"]
+        ["Kategori A (Paling Populer)", "Kategori B (Cukup Populer)", "Kategori C (Kurang Populer)"]
         )
 
     with tab_a:
@@ -801,9 +819,9 @@ elif menu == "Validasi Referensi":
         hole=0.35,
         color="Status Validasi",
         color_discrete_map={
-            "Ditemukan": "#2056a7",
-            "Tidak Ditemukan": "#bc4a19"
-        }
+            "Ditemukan": "#2E8B57",
+            "Tidak Ditemukan": "#D9534F"
+            }
     )
 
     fig_validasi.update_traces(textinfo="label+percent+value")
