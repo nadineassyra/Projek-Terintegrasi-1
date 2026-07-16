@@ -16,9 +16,9 @@ st.set_page_config(
 # =========================
 
 COLOR_ABC = {
-    "A": "#2056a7",
-    "B": "#70ab0b",
-    "C": "#bc4a19"
+    "A": "#20a722",
+    "B": "#d1bd08",
+    "C": "#bc1919"
 }
 
 COLOR_KATEGORI = {
@@ -131,13 +131,6 @@ def load_data():
 df = load_data()
 
 # =========================
-# HEADER UTAMA
-# =========================
-
-st.title("📍 Analisis Tempat Wisata Bandung")
-st.write("ABC Analysis Berdasarkan Rating, Jumlah Ulasan, dan Budget Pengunjung")
-
-# =========================
 # SIDEBAR
 # =========================
 
@@ -146,30 +139,31 @@ st.sidebar.title("Navigasi")
 menu = st.sidebar.radio(
     "Pilih Halaman",
     [
-        "Dashboard",
-        "Hasil ABC Analysis",
-        "Validasi Referensi",
-        "Preprocessing"
+        "Dashboard Wisata",
+        "Analysis Popularitas Wisata",
+        "Validasi Rekomendasi",
+        "Pengolahan Data"
     ]
 )
 
 st.sidebar.markdown("---")
+
 st.sidebar.header("Filter Data")
 
 kategori_filter = st.sidebar.selectbox(
-    "Kategori Wisata",
+    "Kategori Tempat Wisata",
     ["Semua"] + sorted(df["Kategori Tempat"].dropna().unique())
 )
 
 abc_filter = st.sidebar.selectbox(
-    "Klasifikasi ABC",
+    "Kategori ABC",
     ["Semua"] + sorted(df["Klasifikasi ABC"].dropna().unique())
 )
 
 max_budget = int(df["Harga Masuk"].max()) if len(df) > 0 else 0
 
 budget = st.sidebar.slider(
-    "💰 Budget Maksimal",
+    "💰 Budget Tiket Maksimal",
     min_value=0,
     max_value=max_budget,
     value=50000,
@@ -192,10 +186,29 @@ if abc_filter != "Semua":
 # DASHBOARD
 # =========================
 
-if menu == "Dashboard":
+if menu == "Dashboard Wisata":
 
     st.header("📊 Dashboard Analisis Wisata")
-
+    st.markdown("""
+                Dashboard ini menyajikan hasil **ABC Analysis** berdasarkan skor popularitas
+                (tempat wisata dengan kombinasi **rating** dan **jumlah ulasan**) serta
+                membantu pengguna menemukan rekomendasi wisata sesuai **budget** dan
+                **kategori wisata**.
+                """)
+    
+    st.info("""
+            **Metode yang digunakan**
+            • Popularitas dihitung berdasarkan Rating Tempat dan Jumlah Ulasan.
+            • Hasil kemudian diklasifikasikan menggunakan **ABC Analysis**
+            menjadi:
+            
+            🟢 A = Paling Populer
+            
+            🟡 B = Cukup Populer
+            
+            🔴 C = Kurang Populer
+            """)
+    
     if len(df_filter) == 0:
         st.warning("Tidak ada data yang sesuai dengan filter yang dipilih.")
 
@@ -254,14 +267,17 @@ if menu == "Dashboard":
                 hole=0.35,
                 color="Klasifikasi ABC",      
                 color_discrete_map={
-                    "A": "#2056A7",
-                    "B": "#70AB0B",
-                    "C": "#BC4A19"
-    }
-)
+                    "A": "#20a722",
+                    "B": "#d1bd08",
+                    "C": "#bc1919"
+                    }
+                )
 
             fig_pie_abc.update_traces(textinfo="label+percent+value")
             st.plotly_chart(fig_pie_abc, use_container_width=True)
+            st.caption(
+                "Mayoritas tempat wisata berada pada kategori A, menunjukkan sebagian besar destinasi memiliki kontribusi popularitas yang tinggi berdasarkan hasil ABC Analysis."
+)
 
         with col_right:
             st.subheader("Top 10 Tempat Wisata Kategori A")
@@ -315,6 +331,9 @@ if menu == "Dashboard":
                 )
 
                 st.plotly_chart(fig_top10, use_container_width=True)
+                st.caption(
+                    "Grafik menunjukkan sepuluh destinasi wisata kategori A dengan skor popularitas tertinggi yang telah disesuaikan dengan budget dan kategori wisata yang dipilih pengguna."
+)
 
         st.markdown("---")
 
@@ -362,6 +381,9 @@ if menu == "Dashboard":
                 )
 
                 st.plotly_chart(fig_kategori_a, use_container_width=True)
+                st.caption(
+                    "Grafik memperlihatkan penyebaran tempat wisata kategori A berdasarkan kategori wisata sehingga dapat diketahui kategori yang paling mendominasi."
+)
 
         with col_right:
             st.subheader("Distribusi Wisata Kategori A Berdasarkan Wilayah")
@@ -393,6 +415,9 @@ if menu == "Dashboard":
                 )
 
                 st.plotly_chart(fig_wilayah_a, use_container_width=True)
+                st.caption(
+                    "Distribusi wilayah membantu melihat lokasi dengan jumlah wisata populer terbanyak di Kota Bandung."
+)
 
         # =========================
         # REKOMENDASI WISATA
@@ -406,7 +431,17 @@ if menu == "Dashboard":
             "yang sesuai dengan budget pengguna, kategori wisata yang dipilih, serta memiliki status validasi "
             "\"Sesuai\" terhadap platform referensi."
         )
-
+        
+        st.markdown("""
+                    **Kriteria rekomendasi:**
+                    
+                    - Termasuk kategori A hasil ABC Analysis
+                    - Memenuhi budget tiket maksimal yang dipilih
+                    - Sesuai dengan kategori wisata yang dipilih
+                    - Memiliki status validasi **"Sesuai"** pada platform referensi
+                    - Diurutkan berdasarkan skor popularitas tertinggi
+                    """)
+        
         rekomendasi = df.copy()
 
         rekomendasi = rekomendasi[
@@ -420,15 +455,15 @@ if menu == "Dashboard":
             ]
 
         rekomendasi = rekomendasi[
-            rekomendasi["KET"].str.strip().str.lower() == "sesuai"
+            rekomendasi["KET"].fillna("").str.strip().str.lower() == "sesuai"
 ]
-        rekomendasi = rekomendasi.reset_index(drop=True)
-        rekomendasi["Peringkat"] = range(1, len(rekomendasi) + 1)
         
         rekomendasi = rekomendasi.sort_values(
-            by=["Skor Popularitas", "Urutan Popularitas"],
-            ascending=[False, True]
-)
+            by=["Skor Popularitas","Urutan Popularitas"],
+            ascending=[False,True]
+            ).reset_index(drop=True)
+        
+        rekomendasi["Peringkat"] = range(1, len(rekomendasi)+1)
 
         col1, col2, col3 = st.columns(3)
 
@@ -439,7 +474,19 @@ if menu == "Dashboard":
             col3.metric("Harga Termurah", format_rupiah(rekomendasi["Harga Masuk"].min()))
 
             st.success(f"Ditemukan {len(rekomendasi)} tempat wisata sesuai budget dan kategori.")
-
+            cari = st.text_input(
+                "🔍 Cari Nama Tempat Wisata"
+                )
+            # Filter berdasarkan nama tempat
+            if cari:
+                rekomendasi = rekomendasi[
+                    rekomendasi["Nama Tempat"].str.contains(
+                        cari,
+                        case=False,
+                        na=False
+        )
+    ]
+            
             kolom_rekomendasi = ambil_kolom_tersedia(
                 rekomendasi,
                 [
@@ -482,9 +529,9 @@ if menu == "Dashboard":
 # PREPROCESSING
 # =========================
 
-elif menu == "Preprocessing":
+elif menu == "Pengolahan Data":
 
-    st.header("⚙️ Ringkasan Preprocessing Data")
+    st.header("⚙️ Ringkasan Pengolahan Data")
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -517,8 +564,25 @@ elif menu == "Preprocessing":
 
     st.markdown("---")
 
-    st.subheader("Data Hasil Preprocessing dan ABC Analysis")
-
+    st.subheader("Hasil Preprocessing dan Klasifikasi ABC")
+    
+    # Search
+    search_pre = st.text_input(
+        "🔍 Cari Nama Tempat Wisata",
+        placeholder="Masukkan nama tempat wisata..."
+)
+    # Filter berdasarkan pencarian
+    data_search = df_filter.copy()
+    
+    if search_pre:
+        data_search = data_search[
+            data_search["Nama Tempat"].str.contains(
+                search_pre,
+                case=False,
+                na=False
+        )
+    ]
+    
     kolom_preprocessing = ambil_kolom_tersedia(
         df_filter,
         [
@@ -587,9 +651,11 @@ elif menu == "Preprocessing":
 # HASIL ABC ANALYSIS
 # =========================
 
-elif menu == "Hasil ABC Analysis":
+elif menu == "Analysis Popularitas Wisata":
 
     st.header("📌 Hasil ABC Analysis")
+    
+    st.write("Halaman ini menampilkan hasil klasifikasi ABC serta analisis hubungan antara skor popularitas, kategori wisata, dan wilayah.")
 
     if len(df_filter) == 0:
         st.warning("Tidak ada data yang sesuai dengan filter yang dipilih.")
@@ -787,7 +853,7 @@ elif menu == "Hasil ABC Analysis":
 # VALIDASI REFERENSI
 # =========================
 
-elif menu == "Validasi Referensi":
+elif menu == "Validasi Rekomendasi":
 
     st.header("✅ Validasi Hasil Rekomendasi dengan Platform Referensi")
 
@@ -801,7 +867,7 @@ elif menu == "Validasi Referensi":
     col1.metric("Total Kategori A", 90)
     col2.metric("Ditemukan", 72)
     col3.metric("Tidak Ditemukan", 18)
-    col4.metric("Masuk Top 50", 41)
+    col4.metric("Masuk platform referensi", 41)
 
     st.markdown("---")
 
@@ -834,7 +900,7 @@ elif menu == "Validasi Referensi":
             "Total wisata kategori A",
             "Ditemukan pada platform referensi",
             "Tidak ditemukan pada platform referensi",
-            "Masuk Top 50 platform referensi"
+            "Masuk platform referensi"
         ],
         "Jumlah": [90, 72, 18, 41],
         "Persentase": [
