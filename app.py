@@ -160,7 +160,16 @@ abc_filter = st.sidebar.selectbox(
     ["Semua"] + sorted(df["Klasifikasi ABC"].dropna().unique())
 )
 
-max_budget = int(df["Harga Masuk"].max()) if len(df) > 0 else 0
+rekomendasi_budget = df[
+    (df["Klasifikasi ABC"] == "A") &
+    (df["KET"].fillna("").str.strip().str.lower() == "sesuai")
+]
+
+max_budget = (
+    int(rekomendasi_budget["Harga Masuk"].max())
+    if len(rekomendasi_budget) > 0
+    else 0
+)
 
 budget = st.sidebar.slider(
     "💰 Budget Tiket Maksimal",
@@ -605,7 +614,7 @@ elif menu == "Pengolahan Data":
 
     with tab_a:
         data_a = (
-            df_filter[df_filter["Klasifikasi ABC"] == "A"]
+            data_search[data_search["Klasifikasi ABC"] == "A"]
             .sort_values(
                 by=["Skor Popularitas", "Urutan Popularitas"],
                 ascending=[False, True]
@@ -620,7 +629,7 @@ elif menu == "Pengolahan Data":
 
     with tab_b:
         data_b = (
-            df_filter[df_filter["Klasifikasi ABC"] == "B"]
+            data_search[data_search["Klasifikasi ABC"] == "B"]
             .sort_values(
                 by=["Skor Popularitas", "Urutan Popularitas"],
                 ascending=[False, True]
@@ -635,7 +644,7 @@ elif menu == "Pengolahan Data":
 
     with tab_c:
         data_c = (
-            df_filter[df_filter["Klasifikasi ABC"] == "C"]
+            data_search[data_search["Klasifikasi ABC"] == "C"]
             .sort_values(
                 by=["Skor Popularitas", "Urutan Popularitas"],
                 ascending=[False, True]
