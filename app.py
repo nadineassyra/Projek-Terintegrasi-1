@@ -282,7 +282,12 @@ if menu == "Dashboard Wisata":
                     }
                 )
 
-            fig_pie_abc.update_traces(textinfo="label+percent+value")
+            fig_pie_abc.update_traces(
+                textinfo="label+percent",
+                textposition="inside",
+                insidetextorientation="horizontal",
+                textfont=dict(size=12, color="white")
+)
             st.plotly_chart(fig_pie_abc, use_container_width=True)
             st.caption(
                 "Mayoritas tempat wisata berada pada kategori A, menunjukkan sebagian besar destinasi memiliki kontribusi popularitas yang tinggi berdasarkan hasil ABC Analysis."
